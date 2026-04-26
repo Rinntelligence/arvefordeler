@@ -1,18 +1,33 @@
 import { useState } from 'react'
-import { signInWithMagicLink } from '../lib/supabase'
+import { supabase } from '../lib/supabase'
 
 export default function LoginPage({ onToast }) {
+  const [mode, setMode] = useState('login') // 'login' | 'signup'
   const [email, setEmail] = useState('')
-  const [sent, setSent] = useState(false)
+  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const handleSend = async () => {
-    if (!email.trim()) return
+  const handleSubmit = async () => {
+    if (!email.trim() || !password.trim()) return
     setLoading(true)
-    const { error } = await signInWithMagicLink(email.trim())
+
+    if (mode === 'signup') {
+      const { error } = await supabase.auth.signUp({ email: email.trim(), password })
+      if (error) { onToast(norwegianError(error.message), 'error'); setLoading(false); return }
+      const { error: loginErr } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
+      if (loginErr) { onToast('Konto opprettet! Logg inn.', 'success'); setMode('login') }
+    } else {
+      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
+      if (error) { onToast(norwegianError(error.message), 'error') }
+    }
     setLoading(false)
-    if (error) { onToast('Noe gikk galt. Prøv igjen.', 'error'); return }
-    setSent(true)
+  }
+
+  const norwegianError = (msg) => {
+    if (msg.includes('Invalid login')) return 'Feil e-post eller passord'
+    if (msg.includes('already registered')) return 'E-posten er allerede registrert – prøv å logg inn'
+    if (msg.includes('Password should')) return 'Passordet må være minst 6 tegn'
+    return msg
   }
 
   return (
@@ -21,66 +36,68 @@ export default function LoginPage({ onToast }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: '20px', fontFamily: 'DM Sans, sans-serif',
     }}>
-      <div style={{ maxWidth: '420px', width: '100%' }}>
-        {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: '48px' }}>
+      <div style={{ maxWidth: '400px', width: '100%' }}>
+        <div style={{ textAlign: 'center', marginBottom: '40px' }}>
           <div style={{ fontSize: '52px', marginBottom: '16px' }}>🏡</div>
           <h1 style={{ fontFamily: 'Lora, serif', fontSize: '28px', fontWeight: '400', color: '#2a1f14', marginBottom: '10px' }}>
             Familiens gjenstander
           </h1>
           <p style={{ color: '#8c7b6b', fontSize: '15px', lineHeight: '1.6' }}>
-            Et felles sted for familien å fordele gjenstander med kjærlighet
+            Et felles sted for familien å fordele gjenstander
           </p>
         </div>
 
         <div style={{ background: '#fff', border: '1px solid #e8e0d6', borderRadius: '12px', padding: '36px', boxShadow: '0 4px 32px rgba(0,0,0,0.06)' }}>
-          {!sent ? (
-            <>
-              <h2 style={{ fontFamily: 'Lora, serif', fontSize: '20px', fontWeight: '400', color: '#2a1f14', marginBottom: '8px' }}>Logg inn</h2>
-              <p style={{ color: '#8c7b6b', fontSize: '14px', marginBottom: '24px', lineHeight: '1.6' }}>
-                Skriv inn e-postadressen din – du får en innloggingslenke rett i innboksen. Ingen passord!
-              </p>
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '13px', color: '#8c7b6b', marginBottom: '8px' }}>E-postadresse</label>
-                <input
-                  type="email" value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleSend()}
-                  placeholder="navn@epost.no"
-                  style={{
-                    width: '100%', padding: '12px 14px', border: '1px solid #e0d8d0',
-                    borderRadius: '8px', fontSize: '15px', background: '#faf7f3',
-                    color: '#2a1f14', outline: 'none', fontFamily: 'DM Sans, sans-serif',
-                  }}
-                />
-              </div>
-              <button onClick={handleSend} disabled={loading || !email.trim()} style={{
-                width: '100%', padding: '13px', background: email.trim() ? '#2a1f14' : '#c0b8b0',
-                color: '#f5f0eb', border: 'none', borderRadius: '8px',
-                cursor: email.trim() ? 'pointer' : 'not-allowed',
-                fontSize: '15px', fontFamily: 'DM Sans, sans-serif',
-              }}>
-                {loading ? 'Sender…' : 'Send innloggingslenke'}
-              </button>
-              <p style={{ textAlign: 'center', fontSize: '12px', color: '#b0a090', marginTop: '20px' }}>
-                Alle familiemedlemmer bruker sin egen e-post. Første gang setter du opp visningsnavnet ditt.
-              </p>
-            </>
-          ) : (
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '40px', marginBottom: '16px' }}>📬</div>
-              <h2 style={{ fontFamily: 'Lora, serif', fontSize: '20px', fontWeight: '400', color: '#2a1f14', marginBottom: '10px' }}>Sjekk e-posten!</h2>
-              <p style={{ color: '#6b5c4c', fontSize: '14px', lineHeight: '1.7' }}>
-                Vi har sendt en innloggingslenke til<br />
-                <strong>{email}</strong><br /><br />
-                Klikk på lenken i e-posten for å komme inn. Den er gyldig i 1 time.
-              </p>
-              <button onClick={() => setSent(false)} style={{ marginTop: '24px', background: 'none', border: '1px solid #e0d8d0', padding: '9px 20px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', color: '#6b5c4c', fontFamily: 'DM Sans, sans-serif' }}>
-                Prøv en annen e-post
-              </button>
+          <div style={{ display: 'flex', background: '#f5f0eb', borderRadius: '8px', padding: '4px', marginBottom: '28px' }}>
+            {[['login', 'Logg inn'], ['signup', 'Opprett konto']].map(([m, label]) => (
+              <button key={m} onClick={() => setMode(m)} style={{
+                flex: 1, padding: '9px', border: 'none', borderRadius: '6px', cursor: 'pointer',
+                background: mode === m ? '#fff' : 'transparent',
+                color: mode === m ? '#2a1f14' : '#8c7b6b',
+                fontSize: '14px', fontFamily: 'DM Sans, sans-serif',
+                boxShadow: mode === m ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+                transition: 'all 0.15s',
+              }}>{label}</button>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', color: '#8c7b6b', marginBottom: '6px' }}>E-postadresse</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                placeholder="navn@epost.no" onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+                style={{ width: '100%', padding: '12px 14px', border: '1px solid #e0d8d0', borderRadius: '8px', fontSize: '15px', background: '#faf7f3', color: '#2a1f14', outline: 'none', fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
             </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', color: '#8c7b6b', marginBottom: '6px' }}>Passord</label>
+              <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+                placeholder={mode === 'signup' ? 'Minst 6 tegn' : '••••••••'} onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+                style={{ width: '100%', padding: '12px 14px', border: '1px solid #e0d8d0', borderRadius: '8px', fontSize: '15px', background: '#faf7f3', color: '#2a1f14', outline: 'none', fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
+            </div>
+          </div>
+
+          <button onClick={handleSubmit} disabled={loading || !email.trim() || !password.trim()} style={{
+            width: '100%', padding: '13px',
+            background: (email.trim() && password.trim()) ? '#2a1f14' : '#c0b8b0',
+            color: '#f5f0eb', border: 'none', borderRadius: '8px',
+            cursor: (email.trim() && password.trim()) ? 'pointer' : 'not-allowed',
+            fontSize: '15px', fontFamily: 'DM Sans, sans-serif',
+          }}>
+            {loading ? 'Venter…' : mode === 'login' ? 'Logg inn' : 'Opprett konto'}
+          </button>
+
+          {mode === 'login' && (
+            <p style={{ textAlign: 'center', marginTop: '16px', fontSize: '13px', color: '#a89080' }}>
+              Ikke registrert ennå?{' '}
+              <button onClick={() => setMode('signup')} style={{ background: 'none', border: 'none', color: '#c4855a', cursor: 'pointer', fontSize: '13px', fontFamily: 'DM Sans, sans-serif', textDecoration: 'underline' }}>
+                Opprett konto
+              </button>
+            </p>
           )}
         </div>
+        <p style={{ textAlign: 'center', marginTop: '20px', fontSize: '12px', color: '#b0a090' }}>
+          Hvert familiemedlem oppretter sin egen konto med e-post og passord
+        </p>
       </div>
     </div>
   )
